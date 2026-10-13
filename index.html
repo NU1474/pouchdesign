@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>パウチ型リチウムイオンセル試作設計シミュレーター</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cathode: '#ef4444',
+                        anode: '#3b82f6',
+                        separator: '#eab308',
+                        electrolyte: '#10b981',
+                        pouch: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #report-modal, #report-modal *, #print-report-area, #print-report-area * {
+                visibility: visible;
+            }
+            #report-modal {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: auto;
+                background: white;
+                display: block !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-30 no-print">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight">パウチ型リチウムイオンセル試作設計シミュレーター</h1>
+                    <p class="text-xs text-slate-400">Pouch Li-ion Cell Prototype Design & Simulation Tool</p>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 mt-2 sm:mt-0">
+                <span id="save-status" class="text-xs text-emerald-400 font-medium px-2 py-1 bg-slate-800 rounded">自動保存中</span>
+                <button onclick="saveJSON()" class="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-1.5 rounded font-medium transition flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>JSON保存
+                </button>
+                <label class="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-1.5 rounded font-medium transition cursor-pointer flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>読込
+                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="loadJSON(event)">
+                </label>
+                <button onclick="duplicateCase()" class="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-1.5 rounded font-medium transition">ケース複製</button>
+                <button onclick="resetData()" class="bg-rose-900/60 hover:bg-rose-800 text-xs px-3 py-1.5 rounded font-medium transition text-rose-200">リセット</button>
+                <button onclick="openReportModal()" class="bg-blue-600 hover:bg-blue-500 text-xs px-3 py-1.5 rounded font-semibold transition flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>設計レポート・PDF
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content: 3-Pane Desktop Layout -->
+    <main class="flex-1 max-w-[1920px] w-full mx-auto p-3 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Left Pane: Design Parameters (Cols 1-4) -->
+        <section class="lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden no-print">
+            <div class="bg-slate-800 text-white px-4 py-3 font-bold text-sm flex justify-between items-center">
+                <span>設計パラメータ入力</span>
+                <div class="flex items-center gap-2">
+                    <select id="case-selector" onchange="switchCase(this.value)" class="bg-slate-700 text-xs text-white rounded px-2 py-1 border border-slate-600">
+                        <option value="caseA">ケースA: 標準NMC/Graphite</option>
+                        <option value="caseB">ケースB: 高容量Si複合負極</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="accordion-container" class="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
+                
+                <!-- 1. 基本仕様 -->
+                <div class="border border-slate-200 rounded-lg overflow-hidden">
+                    <button type="button" onclick="toggleAccordion('acc-1')" class="w-full bg-slate-50 hover:bg-slate-100 px-3 py-2 font-semibold text-left flex justify-between items-center text-slate-700">
+                        <span>1. 基本仕様</span>
+                        <svg class="w-4 h-4 transform transition-transform" id="icon-acc-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div id="acc-1" class="p-3 space-y-2 border-t border-slate-200 bg-white">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">セル識別名</label><input type="text" id="cell_name" class="w-full border rounded px-2 py-1" value="Pouch-Cell-01" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">試作番号</label><input type="text" id="proto_no" class="w-full border rounded px-2 py-1" value="TP-2026-001" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">設計バージョン</label><input type="text" id="version" class="w-full border rounded px-2 py-1" value="Rev.1.0" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">セル用途</label><input type="text" id="application" class="w-full border rounded px-2 py-1" value="IoT・小型モビリティ" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-slate-500 mb-1">電池化学系</label>
+                                <select id="chemistry_system" class="w-full border rounded px-2 py-1" onchange="applyPresetChemistry()">
+                                    <option value="NMC_Graphite">NMC / グラファイト</option>
+                                    <option value="LFP_Graphite">LFP / グラファイト</option>
+                                    <option value="NMC_SiC">NMC / Si系複合負極</option>
+                                    <option value="LCO_Graphite">LCO / グラファイト</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-slate-500 mb-1">正極材料</label>
+                                <select id="cathode_material" class="w-full border rounded px-2 py-1" onchange="calcAll()">
+                                    <option value="NMC811">NMC811</option>
+                                    <option value="NMC622" selected>NMC622</option>
+                                    <option value="LFP">LFP</option>
+                                    <option value="LCO">LCO</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-slate-500 mb-1">負極材料</label>
+                                <select id="anode_material" class="w-full border rounded px-2 py-1" onchange="calcAll()">
+                                    <option value="Graphite" selected>人造・天然グラファイト</option>
+                                    <option value="Si_Graphite">Si系複合グラファイト</option>
+                                    <option value="HardCarbon">ハードカーボン</option>
+                                </select>
+                            </div>
+                            <div><label class="block text-slate-500 mb-1">公称電圧 (V)</label><input type="number" id="nominal_voltage" step="0.05" class="w-full border rounded px-2 py-1" value="3.65" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div><label class="block text-slate-500 mb-1">目標容量 (Ah)</label><input type="number" id="target_capacity" step="0.1" class="w-full border rounded px-2 py-1" value="5.0" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">目標重量 (g)</label><input type="number" id="target_weight" step="1" class="w-full border rounded px-2 py-1" value="95" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">目標厚み (mm)</label><input type="number" id="target_thickness" step="0.1" class="w-full border rounded px-2 py-1" value="4.2" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">設計担当者</label><input type="text" id="designer" class="w-full border rounded px-2 py-1" value="開発部 試作設計チーム" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">作成日</label><input type="date" id="create_date" class="w-full border rounded px-2 py-1" value="2026-03-30" oninput="calcAll()"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 正極設計 -->
+                <div class="border border-slate-200 rounded-lg overflow-hidden">
+                    <button type="button" onclick="toggleAccordion('acc-2')" class="w-full bg-slate-50 hover:bg-slate-100 px-3 py-2 font-semibold text-left flex justify-between items-center text-slate-700">
+                        <span>2. 正極設計 (材料・塗工)</span>
+                        <svg class="w-4 h-4 transform transition-transform" id="icon-acc-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div id="acc-2" class="p-3 space-y-2 border-t border-slate-200 bg-white hidden">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">理論比容量 (mAh/g)</label><input type="number" id="cat_theo_cap" class="w-full border rounded px-2 py-1" value="275" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">実用比容量設計 (mAh/g)</label><input type="number" id="cat_prac_cap" class="w-full border rounded px-2 py-1" value="185" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-4 gap-1">
+                            <div><label class="block text-slate-500 text-[10px] mb-1">活物質 wt%</label><input type="number" id="cat_active_ratio" class="w-full border rounded px-1 py-1 text-center" value="94.0" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 text-[10px] mb-1">導電助剤 wt%</label><input type="number" id="cat_cond_ratio" class="w-full border rounded px-1 py-1 text-center" value="3.0" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 text-[10px] mb-1">バインダー wt%</label><input type="number" id="cat_binder_ratio" class="w-full border rounded px-1 py-1 text-center" value="3.0" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 text-[10px] mb-1">固形分 wt%</label><input type="number" id="cat_solid_ratio" class="w-full border rounded px-1 py-1 text-center" value="68.0" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">正極幅 (mm)</label><input type="number" id="cat_width" class="w-full border rounded px-2 py-1" value="50" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">正極長さ (mm)</label><input type="number" id="cat_length" class="w-full border rounded px-2 py-1" value="80" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-slate-500 mb-1">塗工方式</label>
+                                <select id="cat_coating_type" class="w-full border rounded px-2 py-1" onchange="calcAll()">
+                                    <option value="double" selected>両面塗工</option>
+                                    <option value="single">片面塗工</option>
+                                </select>
+                            </div>
+                            <div><label class="block text-slate-500 mb-1">片面塗布量 (mg/cm²)</label><input type="number" id="cat_loading" step="0.5" class="w-full border rounded px-2 py-1" value="18.5" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">集電体厚 (µm)</label><input type="number" id="cat_foil_thick" class="w-full border rounded px-2 py-1" value="15" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">電極密度 (g/cm³)</label><input type="number" id="cat_density" step="0.1" class="w-full border rounded px-2 py-1" value="2.8" oninput="calcAll()"></div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">プレス後厚み (µm) ※自動計算</label>
+                            <input type="text" id="cat_press_thick" class="w-full border rounded px-2 py-1 bg-slate-100 font-semibold text-slate-700" readonly value="-">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 負極設計 -->
+                <div class="border border-slate-200 rounded-lg overflow-hidden">
+                    <button type="button" onclick="toggleAccordion('acc-3')" class="w-full bg-slate-50 hover:bg-slate-100 px-3 py-2 font-semibold text-left flex justify-between items-center text-slate-700">
+                        <span>3. 負極設計 (材料・塗工)</span>
+                        <svg class="w-4 h-4 transform transition-transform" id="icon-acc-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div id="acc-3" class="p-3 space-y-2 border-t border-slate-200 bg-white hidden">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">理論比容量 (mAh/g)</label><input type="number" id="an_theo_cap" class="w-full border rounded px-2 py-1" value="372" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">実用比容量設計 (mAh/g)</label><input type="number" id="an_prac_cap" class="w-full border rounded px-2 py-1" value="345" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-4 gap-1">
+                            <div><label class="block text-slate-500 text-[10px] mb-1">活物質 wt%</label><input type="number" id="an_active_ratio" class="w-full border rounded px-1 py-1 text-center" value="95.5" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 text-[10px] mb-1">導電助剤 wt%</label><input type="number" id="an_cond_ratio" class="w-full border rounded px-1 py-1 text-center" value="1.0" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 text-[10px] mb-1">バインダー wt%</label><input type="number" id="an_binder_ratio" class="w-full border rounded px-1 py-1 text-center" value="3.5" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 text-[10px] mb-1">固形分 wt%</label><input type="number" id="an_solid_ratio" class="w-full border rounded px-1 py-1 text-center" value="50.0" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">負極幅 (mm)</label><input type="number" id="an_width" class="w-full border rounded px-2 py-1" value="52" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">負極長さ (mm)</label><input type="number" id="an_length" class="w-full border rounded px-2 py-1" value="82" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-slate-500 mb-1">塗工方式</label>
+                                <select id="an_coating_type" class="w-full border rounded px-2 py-1" onchange="calcAll()">
+                                    <option value="double" selected>両面塗工</option>
+                                    <option value="single">片面塗工</option>
+                                </select>
+                            </div>
+                            <div><label class="block text-slate-500 mb-1">片面塗布量 (mg/cm²)</label><input type="number" id="an_loading" step="0.5" class="w-full border rounded px-2 py-1" value="11.2" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">集電体厚 (µm)</label><input type="number" id="an_foil_thick" class="w-full border rounded px-2 py-1" value="8" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">電極密度 (g/cm³)</label><input type="number" id="an_density" step="0.1" class="w-full border rounded px-2 py-1" value="1.6" oninput="calcAll()"></div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">プレス後厚み (µm) ※自動計算</label>
+                            <input type="text" id="an_press_thick" class="w-full border rounded px-2 py-1 bg-slate-100 font-semibold text-slate-700" readonly value="-">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. 積層・セル構成 -->
+                <div class="border border-slate-200 rounded-lg overflow-hidden">
+                    <button type="button" onclick="toggleAccordion('acc-4')" class="w-full bg-slate-50 hover:bg-slate-100 px-3 py-2 font-semibold text-left flex justify-between items-center text-slate-700">
+                        <span>4. 積層・セル構成・セパレーター</span>
+                        <svg class="w-4 h-4 transform transition-transform" id="icon-acc-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div id="acc-4" class="p-3 space-y-2 border-t border-slate-200 bg-white hidden">
+                        <div class="grid grid-cols-3 gap-2">
+                            <div><label class="block text-slate-500 mb-1">正極枚数</label><input type="number" id="cathode_count" class="w-full border rounded px-2 py-1" value="15" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">負極枚数</label><input type="number" id="anode_count" class="w-full border rounded px-2 py-1" value="16" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">セパレーター枚数</label><input type="number" id="separator_count" class="w-full border rounded px-2 py-1" value="31" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">セパレーター幅 (mm)</label><input type="number" id="sep_width" class="w-full border rounded px-2 py-1" value="54" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">セパレーター長さ (mm)</label><input type="number" id="sep_length" class="w-full border rounded px-2 py-1" value="84" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">セパレーター厚 (µm)</label><input type="number" id="sep_thick" class="w-full border rounded px-2 py-1" value="16" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">セパレーター空隙 (%)</label><input type="number" id="sep_porosity" class="w-full border rounded px-2 py-1" value="45" oninput="calcAll()"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. 電解液 -->
+                <div class="border border-slate-200 rounded-lg overflow-hidden">
+                    <button type="button" onclick="toggleAccordion('acc-5')" class="w-full bg-slate-50 hover:bg-slate-100 px-3 py-2 font-semibold text-left flex justify-between items-center text-slate-700">
+                        <span>5. 電解液設計</span>
+                        <svg class="w-4 h-4 transform transition-transform" id="icon-acc-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div id="acc-5" class="p-3 space-y-2 border-t border-slate-200 bg-white hidden">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">電解液種</label><input type="text" id="electrolyte_type" class="w-full border rounded px-2 py-1" value="1M LiPF6 in EC/EMC/DMC" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">電解液密度 (g/mL)</label><input type="number" id="electrolyte_density" step="0.05" class="w-full border rounded px-2 py-1" value="1.22" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">含浸係数 (空隙体積比)</label><input type="number" id="electrolyte_coeff" step="0.1" class="w-full border rounded px-2 py-1" value="1.3" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">手動注液量上書 (g)</label><input type="number" id="electrolyte_manual_g" placeholder="自動推定時は空欄" step="0.1" class="w-full border rounded px-2 py-1" oninput="calcAll()"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. タブ・パウチ外装 -->
+                <div class="border border-slate-200 rounded-lg overflow-hidden">
+                    <button type="button" onclick="toggleAccordion('acc-6')" class="w-full bg-slate-50 hover:bg-slate-100 px-3 py-2 font-semibold text-left flex justify-between items-center text-slate-700">
+                        <span>6. タブ・パウチ外装設計</span>
+                        <svg class="w-4 h-4 transform transition-transform" id="icon-acc-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div id="acc-6" class="p-3 space-y-2 border-t border-slate-200 bg-white hidden">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-slate-500 mb-1">正極タブ材質</label><input type="text" id="pos_tab_material" class="w-full border rounded px-2 py-1" value="アルミニウム" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">負極タブ材質</label><input type="text" id="neg_tab_material" class="w-full border rounded px-2 py-1" value="ニッケル付銅" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div><label class="block text-slate-500 mb-1">タブ幅 (mm)</label><input type="number" id="tab_width" class="w-full border rounded px-2 py-1" value="8" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">タブ長さ (mm)</label><input type="number" id="tab_length" class="w-full border rounded px-2 py-1" value="25" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">タブ厚 (mm)</label><input type="number" id="tab_thick" step="0.02" class="w-full border rounded px-2 py-1" value="0.1" oninput="calcAll()"></div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div><label class="block text-slate-500 mb-1">パウチフィルム厚(µm)</label><input type="number" id="pouch_film_thick" class="w-full border rounded px-2 py-1" value="113" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">シール幅 (mm)</label><input type="number" id="pouch_seal_width" class="w-full border rounded px-2 py-1" value="5.0" oninput="calcAll()"></div>
+                            <div><label class="block text-slate-500 mb-1">ガス溜まり余白(mm)</label><input type="number" id="pouch_gas_margin" class="w-full border rounded px-2 py-1" value="12" oninput="calcAll()"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Center Pane: Cell Structure View & Graphs (Cols 5-8) -->
+        <section class="lg:col-span-5 flex flex-col gap-4">
+            
+            <!-- Cell Structure Viewer (SVG) -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+                        セル構造概念図 (タブ＋セル全体像・中央配置)
+                    </h2>
+                    <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">※寸法比率完全連動</span>
+                </div>
+                <div class="border border-slate-100 rounded-lg bg-slate-50 flex items-center justify-center p-2 relative overflow-hidden" style="min-height: 300px;">
+                    <svg id="cell-svg" viewBox="0 0 400 300" class="w-full h-full max-h-[300px]">
+                        <!-- Dynamically rendered via JS -->
+                    </svg>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-2 text-center text-[11px]">
+                    <div class="bg-slate-50 p-1.5 rounded border border-slate-100">
+                        <span class="text-slate-500 block">外形寸法 (W×L×T)</span>
+                        <span id="view-outer-dims" class="font-bold text-slate-700">-</span>
+                    </div>
+                    <div class="bg-slate-50 p-1.5 rounded border border-slate-100">
+                        <span class="text-slate-500 block">積層体厚み</span>
+                        <span id="view-stack-thick" class="font-bold text-slate-700">-</span>
+                    </div>
+                    <div class="bg-slate-50 p-1.5 rounded border border-slate-100">
+                        <span class="text-slate-500 block">N/P比</span>
+                        <span id="view-np-badge" class="font-bold text-blue-600">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Charts & Comparison -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col flex-1">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>
+                        重量構成割合 & 容量バランス
+                    </h2>
+                </div>
+                <!-- Mini Bar Charts Container -->
+                <div class="space-y-3 text-xs mb-3">
+                    <div>
+                        <div class="flex justify-between text-slate-600 mb-1">
+                            <span>正極容量 / 負極容量バランス</span>
+                            <span id="cap-balance-text">-</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden flex">
+                            <div id="bar-cathode-cap" class="bg-red-500 h-2.5 transition-all duration-300" style="width: 50%"></div>
+                            <div id="bar-anode-cap" class="bg-blue-500 h-2.5 transition-all duration-300" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-slate-600 mb-1">
+                            <span>セル重量構成 (活物質 vs その他部材)</span>
+                            <span id="weight-ratio-text">-</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden flex">
+                            <div id="bar-active-wt" class="bg-emerald-500 h-2.5 transition-all duration-300" style="width: 40%" title="活物質重量"></div>
+                            <div id="bar-foil-wt" class="bg-amber-500 h-2.5 transition-all duration-300" style="width: 25%" title="集電体重量"></div>
+                            <div id="bar-elec-wt" class="bg-teal-500 h-2.5 transition-all duration-300" style="width: 15%" title="電解液重量"></div>
+                            <div id="bar-other-wt" class="bg-slate-400 h-2.5 transition-all duration-300" style="width: 20%" title="その他・外装"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Case Comparison Table Preview -->
+                <div class="mt-auto pt-2 border-t border-slate-100">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-semibold text-slate-700">ケース比較マトリクス</span>
+                        <span class="text-[10px] text-slate-400">現在設計との比較</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-[11px] text-left text-slate-600">
+                            <thead class="bg-slate-50 text-slate-700 font-semibold border-b">
+                                <tr>
+                                    <th class="p-1.5">項目</th>
+                                    <th class="p-1.5 text-right">ケースA (標準)</th>
+                                    <th class="p-1.5 text-right">ケースB (高容量)</th>
+                                    <th class="p-1.5 text-right">現在値</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b">
+                                    <td class="p-1.5">設計容量 (Ah)</td>
+                                    <td class="p-1.5 text-right">4.85 Ah</td>
+                                    <td class="p-1.5 text-right">5.40 Ah</td>
+                                    <td class="p-1.5 text-right font-bold text-blue-600" id="cmp-curr-cap">-</td>
+                                </tr>
+                                <tr class="border-b">
+                                    <td class="p-1.5">N/P比</td>
+                                    <td class="p-1.5 text-right">1.12</td>
+                                    <td class="p-1.5 text-right">1.08</td>
+                                    <td class="p-1.5 text-right font-bold text-blue-600" id="cmp-curr-np">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="p-1.5">エネルギー密度 (Wh/kg)</td>
+                                    <td class="p-1.5 text-right">192 Wh/kg</td>
+                                    <td class="p-1.5 text-right">215 Wh/kg</td>
+                                    <td class="p-1.5 text-right font-bold text-blue-600" id="cmp-curr-ed">-</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right Pane: Calculation Results & Evaluation (Cols 9-12) -->
+        <section class="lg:col-span-3 flex flex-col gap-4">
+            
+            <!-- Key Metrics Card -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                <h2 class="font-bold text-slate-800 text-sm mb-3 flex items-center justify-between">
+                    <span class="flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                        主要計算結果
+                    </span>
+                    <span class="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-medium">リアルタイム演算</span>
+                </h2>
+
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="text-slate-500 block text-[10px]">設計容量 (制約考慮)</span>
+                        <span id="res-design-cap" class="text-base font-bold text-slate-900">-</span> <span class="text-[10px] text-slate-500">Ah</span>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="text-slate-500 block text-[10px]">公称電圧 / エネルギー</span>
+                        <span id="res-energy" class="text-base font-bold text-slate-900">-</span> <span class="text-[10px] text-slate-500">Wh</span>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="text-slate-500 block text-[10px]">重量エネルギー密度</span>
+                        <span id="res-grav-ed" class="text-base font-bold text-indigo-600">-</span> <span class="text-[10px] text-slate-500">Wh/kg</span>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="text-slate-500 block text-[10px]">体積エネルギー密度</span>
+                        <span id="res-vol-ed" class="text-base font-bold text-indigo-600">-</span> <span class="text-[10px] text-slate-500">Wh/L</span>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="text-slate-500 block text-[10px]">セル総重量</span>
+                        <span id="res-total-weight" class="text-sm font-bold text-slate-900">-</span> <span class="text-[10px] text-slate-500">g</span>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="text-slate-500 block text-[10px]">セル外形体積</span>
+                        <span id="res-total-volume" class="text-sm font-bold text-slate-900">-</span> <span class="text-[10px] text-slate-500">cm³</span>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="text-slate-500 block text-[10px]">N/P 容量比</span>
+                        <span id="res-np-ratio" class="text-sm font-bold text-blue-600">-</span>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span class="text-slate-500 block text-[10px]">電解液 推定注液量</span>
+                        <span id="res-electrolyte-amt" class="text-sm font-bold text-slate-900">-</span> <span class="text-[10px] text-slate-500">g (mL)</span>
+                    </div>
+                </div>
+
+                <div class="mt-3 pt-3 border-t border-slate-100 text-[11px] space-y-1 text-slate-600">
+                    <div class="flex justify-between"><span>正極基準容量:</span> <span id="res-cat-cap" class="font-medium text-slate-800">-</span></div>
+                    <div class="flex justify-between"><span>負極基準容量:</span> <span id="res-an-cap" class="font-medium text-slate-800">-</span></div>
+                    <div class="flex justify-between"><span>正極面積容量:</span> <span id="res-cat-areal" class="font-medium text-slate-800">-</span></div>
+                    <div class="flex justify-between"><span>負極面積容量:</span> <span id="res-an-areal" class="font-medium text-slate-800">-</span></div>
+                    <div class="flex justify-between"><span>正極活物質総重量:</span> <span id="res-cat-active-wt" class="font-medium text-slate-800">-</span></div>
+                    <div class="flex justify-between"><span>負極活物質総重量:</span> <span id="res-an-active-wt" class="font-medium text-slate-800">-</span></div>
+                </div>
+            </div>
+
+            <!-- Material List Preview -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                        試作材料準備リスト (主要)
+                    </h2>
+                    <button onclick="exportMaterialCSV()" class="text-[10px] text-blue-600 hover:underline font-medium">CSV出力</button>
+                </div>
+                <div class="max-h-36 overflow-y-auto text-[11px] border border-slate-100 rounded">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50 text-slate-700 sticky top-0 border-b">
+                            <tr><th class="p-1.5">材料名</th><th class="p-1.5 text-right">理論必要量</th><th class="p-1.5 text-right">準備量 (+余裕)</th></tr>
+                        </thead>
+                        <tbody id="material-table-body" class="divide-y divide-slate-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Design Warnings & Validation -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex-1 flex flex-col">
+                <h2 class="font-bold text-slate-800 text-sm mb-2 flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    設計チェック・警告事項
+                </h2>
+                <div id="warning-container" class="space-y-1.5 text-[11px] overflow-y-auto max-h-40 flex-1 pr-1">
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Report Modal -->
+    <div id="report-modal" class="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden no-print">
+        <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    パウチ型リチウムイオンセル 設計・試作仕様書レポート
+                </h3>
+                <div class="flex items-center gap-2">
+                    <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded font-semibold transition flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>印刷 / PDF保存
+                    </button>
+                    <button onclick="closeReportModal()" class="text-slate-400 hover:text-white p-1">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="print-report-area" class="p-8 overflow-y-auto space-y-6 text-xs text-slate-700 bg-white">
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Calculation & UI Logic -->
+    <script>
+        // Accordion Toggle
+        function toggleAccordion(id) {
+            const el = document.getElementById(id);
+            const icon = document.getElementById('icon-' + id);
+            if (el) {
+                el.classList.toggle('hidden');
+            }
+            if (icon) {
+                icon.classList.toggle('rotate-180');
+            }
+        }
+
+        // Preset Chemistries
+        function applyPresetChemistry() {
+            const sys = document.getElementById('chemistry_system').value;
+            if (sys === 'NMC_Graphite') {
+                document.getElementById('cathode_material').value = 'NMC622';
+                document.getElementById('anode_material').value = 'Graphite';
+                document.getElementById('nominal_voltage').value = '3.65';
+                document.getElementById('cat_prac_cap').value = '185';
+                document.getElementById('an_prac_cap').value = '345';
+                document.getElementById('cat_density').value = '2.8';
+                document.getElementById('an_density').value = '1.6';
+            } else if (sys === 'LFP_Graphite') {
+                document.getElementById('cathode_material').value = 'LFP';
+                document.getElementById('anode_material').value = 'Graphite';
+                document.getElementById('nominal_voltage').value = '3.20';
+                document.getElementById('cat_prac_cap').value = '145';
+                document.getElementById('an_prac_cap').value = '345';
+                document.getElementById('cat_density').value = '2.3';
+                document.getElementById('an_density').value = '1.6';
+            } else if (sys === 'NMC_SiC') {
+                document.getElementById('cathode_material').value = 'NMC811';
+                document.getElementById('anode_material').value = 'Si_Graphite';
+                document.getElementById('nominal_voltage').value = '3.70';
+                document.getElementById('cat_prac_cap').value = '200';
+                document.getElementById('an_prac_cap').value = '550';
+                document.getElementById('cat_density').value = '2.9';
+                document.getElementById('an_density').value = '1.5';
+            } else if (sys === 'LCO_Graphite') {
+                document.getElementById('cathode_material').value = 'LCO';
+                document.getElementById('anode_material').value = 'Graphite';
+                document.getElementById('nominal_voltage').value = '3.85';
+                document.getElementById('cat_prac_cap').value = '190';
+                document.getElementById('an_prac_cap').value = '345';
+                document.getElementById('cat_density').value = '3.2';
+                document.getElementById('an_density').value = '1.6';
+            }
+            calcAll();
+        }
+
+        // Main Calculation Engine
+        function calcAll() {
+            const nomVolt = parseFloat(document.getElementById('nominal_voltage').value) || 3.65;
+            const targetCap = parseFloat(document.getElementById('target_capacity').value) || 5.0;
+
+            const catPracCap = parseFloat(document.getElementById('cat_prac_cap').value) || 185;
+            const catActRatio = parseFloat(document.getElementById('cat_active_ratio').value) / 100;
+            const catWidth = parseFloat(document.getElementById('cat_width').value) || 50;
+            const catLength = parseFloat(document.getElementById('cat_length').value) || 80;
+            const catCoating = document.getElementById('cat_coating_type').value;
+            const catLoading = parseFloat(document.getElementById('cat_loading').value) || 18.5; // mg/cm2 per side
+            const catFoilThick = parseFloat(document.getElementById('cat_foil_thick').value) || 15;
+            const catDensity = parseFloat(document.getElementById('cat_density').value) || 2.8; // g/cm3
+            const catCount = parseInt(document.getElementById('cathode_count').value) || 15;
+
+            const anPracCap = parseFloat(document.getElementById('an_prac_cap').value) || 345;
+            const anActRatio = parseFloat(document.getElementById('an_active_ratio').value) / 100;
+            const anWidth = parseFloat(document.getElementById('an_width').value) || 52;
+            const anLength = parseFloat(document.getElementById('an_length').value) || 82;
+            const anCoating = document.getElementById('an_coating_type').value;
+            const anLoading = parseFloat(document.getElementById('an_loading').value) || 11.2; // mg/cm2 per side
+            const anFoilThick = parseFloat(document.getElementById('an_foil_thick').value) || 8;
+            const anDensity = parseFloat(document.getElementById('an_density').value) || 1.6; // g/cm3
+            const anCount = parseInt(document.getElementById('anode_count').value) || 16;
+
+            // Automatic Press Thickness Calculation (µm)
+            const catCoatThickUm = (catLoading / catDensity) * 10;
+            const anCoatThickUm = (anLoading / anDensity) * 10;
+
+            const catPressThick = catCoating === 'double' ? catFoilThick + (catCoatThickUm * 2) : catFoilThick + catCoatThickUm;
+            const anPressThick = anCoating === 'double' ? anFoilThick + (anCoatThickUm * 2) : anFoilThick + anCoatThickUm;
+
+            document.getElementById('cat_press_thick').value = catPressThick.toFixed(1);
+            document.getElementById('an_press_thick').value = anPressThick.toFixed(1);
+
+            const sepCount = parseInt(document.getElementById('separator_count').value) || 31;
+            const sepThick = parseFloat(document.getElementById('sep_thick').value) || 16;
+            const sepPorosity = parseFloat(document.getElementById('sep_porosity').value) / 100 || 0.45;
+            const sepDensity = 0.92; // Default PE/PP separator density
+            const sepWidth = parseFloat(document.getElementById('sep_width').value) || 54;
+            const sepLength = parseFloat(document.getElementById('sep_length').value) || 84;
+
+            const elecDensity = parseFloat(document.getElementById('electrolyte_density').value) || 1.22;
+            const elecCoeff = parseFloat(document.getElementById('electrolyte_coeff').value) || 1.3;
+            const elecManualG = parseFloat(document.getElementById('electrolyte_manual_g').value);
+
+            const tabW = parseFloat(document.getElementById('tab_width').value) || 8;
+            const tabL = parseFloat(document.getElementById('tab_length').value) || 25;
+            const tabThick = parseFloat(document.getElementById('tab_thick').value) || 0.1;
+            const pouchFilmThick = parseFloat(document.getElementById('pouch_film_thick').value) || 113;
+            const pouchSealW = parseFloat(document.getElementById('pouch_seal_width').value) || 5.0;
+            const pouchGasMargin = parseFloat(document.getElementById('pouch_gas_margin').value) || 12;
+
+            const catAreaOneSide = (catWidth * catLength) / 100;
+            const anAreaOneSide = (anWidth * anLength) / 100;
+
+            const catFaces = catCoating === 'double' ? catCount * 2 : catCount;
+            const anFaces = anCoating === 'double' ? anCount * 2 : anCount;
+
+            const totalCatCoatingArea = catAreaOneSide * catFaces;
+            const totalAnCoatingArea = anAreaOneSide * anFaces;
+
+            const catArealCapPerCm2 = (catLoading * catActRatio * catPracCap) / 1000;
+            const anArealCapPerCm2 = (anLoading * anActRatio * anPracCap) / 1000;
+
+            const cathodeCapacity = (catArealCapPerCm2 * totalCatCoatingArea) / 1000;
+            const anodeCapacity = (anArealCapPerCm2 * totalAnCoatingArea) / 1000;
+
+            const npRatio = cathodeCapacity > 0 ? (anodeCapacity / cathodeCapacity) : 0;
+            const designCapacity = Math.min(cathodeCapacity, anodeCapacity);
+
+            const catActiveMass = (totalCatCoatingArea * catLoading * catActRatio) / 1000;
+            const catOtherMass = (totalCatCoatingArea * catLoading * (1 - catActRatio)) / 1000;
+            const catFoilArea = catAreaOneSide * catCount;
+            const catFoilMass = (catFoilArea * catFoilThick * 1e-4 * 2.7);
+
+            const anActiveMass = (totalAnCoatingArea * anLoading * anActRatio) / 1000;
+            const anOtherMass = (totalAnCoatingArea * anLoading * (1 - anActRatio)) / 1000;
+            const anFoilArea = anAreaOneSide * anCount;
+            const anFoilMass = (anFoilArea * anFoilThick * 1e-4 * 8.96);
+
+            const sepArea = (sepWidth * sepLength) / 100;
+            const sepTotalArea = sepArea * sepCount;
+            const sepMass = sepTotalArea * (sepThick * 1e-4) * sepDensity;
+
+            const catPoreVol = totalCatCoatingArea * (catCoatThickUm * (catCoating === 'double' ? 2 : 1) * 1e-4) * 0.30;
+            const anPoreVol = totalAnCoatingArea * (anCoatThickUm * (anCoating === 'double' ? 2 : 1) * 1e-4) * 0.35;
+            const sepPoreVol = sepTotalArea * (sepThick * 1e-4) * sepPorosity;
+            const totalPoreVol = catPoreVol + anPoreVol + sepPoreVol;
+
+            const electrolyteMl = !isNaN(elecManualG) ? elecManualG / elecDensity : totalPoreVol * elecCoeff;
+            const electrolyteMass = electrolyteMl * elecDensity;
+
+            const tabVol = (tabW * tabL * tabThick) / 1000;
+            const posTabMass = tabVol * 2.7 * 2;
+            const anTabMass = tabVol * 8.96 * 2;
+            const totalTabMass = posTabMass + anTabMass;
+
+            const stackThicknessMm = (catCount * catPressThick + anCount * anPressThick + sepCount * sepThick) / 1000;
+
+            const maxW = Math.max(catWidth, anWidth, sepWidth);
+            const maxL = Math.max(catLength, anLength, sepLength);
+            const pouchOuterW = maxW + (pouchSealW * 2) + 4;
+            const pouchOuterL = maxL + (pouchSealW * 2) + pouchGasMargin + 6;
+            const pouchOuterT = stackThicknessMm + 1.2;
+
+            const pouchAreaCm2 = (pouchOuterW * pouchOuterL) / 100;
+            const pouchFilmDensity = 1.6;
+            const pouchMass = pouchAreaCm2 * 2 * (pouchFilmThick * 1e-4) * pouchFilmDensity;
+
+            const totalMass = catActiveMass + catOtherMass + catFoilMass + anActiveMass + anOtherMass + anFoilMass + sepMass + electrolyteMass + totalTabMass + pouchMass;
+            const cellVolumeCm3 = (pouchOuterW * pouchOuterL * pouchOuterT) / 1000;
+
+            const totalEnergyWh = designCapacity * nomVolt;
+            const gravEnergyDensity = totalMass > 0 ? (totalEnergyWh / (totalMass / 1000)) : 0;
+            const volEnergyDensity = cellVolumeCm3 > 0 ? (totalEnergyWh / (cellVolumeCm3 / 1000)) : 0;
+
+            // Update UI
+            document.getElementById('res-design-cap').innerText = designCapacity.toFixed(2);
+            document.getElementById('res-energy').innerText = totalEnergyWh.toFixed(2);
+            document.getElementById('res-grav-ed').innerText = gravEnergyDensity.toFixed(1);
+            document.getElementById('res-vol-ed').innerText = volEnergyDensity.toFixed(1);
+            document.getElementById('res-total-weight').innerText = totalMass.toFixed(1);
+            document.getElementById('res-total-volume').innerText = cellVolumeCm3.toFixed(1);
+            document.getElementById('res-np-ratio').innerText = npRatio.toFixed(2);
+            document.getElementById('res-electrolyte-amt').innerText = `${electrolyteMass.toFixed(1)} (${electrolyteMl.toFixed(1)})`;
+
+            document.getElementById('res-cat-cap').innerText = `${cathodeCapacity.toFixed(2)} Ah`;
+            document.getElementById('res-an-cap').innerText = `${anodeCapacity.toFixed(2)} Ah`;
+            document.getElementById('res-cat-areal').innerText = `${catArealCapPerCm2.toFixed(2)} mAh/cm²`;
+            document.getElementById('res-an-areal').innerText = `${anArealCapPerCm2.toFixed(2)} mAh/cm²`;
+            document.getElementById('res-cat-active-wt').innerText = `${catActiveMass.toFixed(1)} g`;
+            document.getElementById('res-an-active-wt').innerText = `${anActiveMass.toFixed(1)} g`;
+
+            document.getElementById('view-outer-dims').innerText = `${pouchOuterW.toFixed(0)} × ${pouchOuterL.toFixed(0)} × ${pouchOuterT.toFixed(1)} mm`;
+            document.getElementById('view-stack-thick').innerText = `${stackThicknessMm.toFixed(2)} mm`;
+            document.getElementById('view-np-badge').innerText = `N/P: ${npRatio.toFixed(2)}`;
+
+            document.getElementById('cmp-curr-cap').innerText = `${designCapacity.toFixed(2)} Ah`;
+            document.getElementById('cmp-curr-np').innerText = npRatio.toFixed(2);
+            document.getElementById('cmp-curr-ed').innerText = `${gravEnergyDensity.toFixed(0)} Wh/kg`;
+
+            const capMax = Math.max(cathodeCapacity, anodeCapacity);
+            const catCapPct = capMax > 0 ? (cathodeCapacity / (cathodeCapacity + anodeCapacity)) * 100 : 50;
+            const anCapPct = 100 - catCapPct;
+            document.getElementById('bar-cathode-cap').style.width = `${catCapPct}%`;
+            document.getElementById('bar-anode-cap').style.width = `${anCapPct}%`;
+            document.getElementById('cap-balance-text').innerText = `正極 ${cathodeCapacity.toFixed(2)}Ah vs 負極 ${anodeCapacity.toFixed(2)}Ah`;
+
+            const activeWtTot = catActiveMass + anActiveMass;
+            const foilWtTot = catFoilMass + anFoilMass;
+            const wtTot = totalMass > 0 ? totalMass : 1;
+            document.getElementById('bar-active-wt').style.width = `${(activeWtTot / wtTot * 100)}%`;
+            document.getElementById('bar-foil-wt').style.width = `${(foilWtTot / wtTot * 100)}%`;
+            document.getElementById('bar-elec-wt').style.width = `${(electrolyteMass / wtTot * 100)}%`;
+            document.getElementById('weight-ratio-text').innerText = `総重量 ${totalMass.toFixed(1)}g`;
+
+            updateMaterialTable({
+                catActive: catActiveMass, catOther: catOtherMass, catFoil: catFoilMass,
+                anActive: anActiveMass, anOther: anOtherMass, anFoil: anFoilMass,
+                sep: sepMass, electrolyte: electrolyteMass, pouch: pouchMass, posTab: posTabMass, anTab: anTabMass
+            });
+
+            checkWarnings({
+                npRatio, cathodeCapacity, anodeCapacity, catWidth, anWidth, catLength, anLength,
+                pouchOuterW, pouchOuterL, targetCap, designCapacity, totalMass
+            });
+
+            drawCellSVG(catWidth, catLength, pouchOuterW, pouchOuterL, catCount, anCount, tabW, tabL);
+        }
+
+        function updateMaterialTable(m) {
+            const tbody = document.getElementById('material-table-body');
+            const items = [
+                { name: '正極活物質', theo: m.catActive, unit: 'g', margin: 1.1 },
+                { name: '正極導電・バインダー', theo: m.catOther, unit: 'g', margin: 1.1 },
+                { name: '正極集電体 (Al箔)', theo: m.catFoil, unit: 'g', margin: 1.05 },
+                { name: '負極活物質', theo: m.anActive, unit: 'g', margin: 1.1 },
+                { name: '負極導電・バインダー', theo: m.anOther, unit: 'g', margin: 1.1 },
+                { name: '負極集電体 (Cu箔)', theo: m.anFoil, unit: 'g', margin: 1.05 },
+                { name: 'セパレーター', theo: m.sep, unit: 'g', margin: 1.15 },
+                { name: '電解液', theo: m.electrolyte, unit: 'g', margin: 1.1 },
+                { name: 'パウチ外装フィルム', theo: m.pouch, unit: 'g', margin: 1.1 },
+                { name: '正極タブ', theo: m.posTab, unit: 'g', margin: 1.1 },
+                { name: '負極タブ', theo: m.anTab, unit: 'g', margin: 1.1 },
+            ];
+
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td class="p-1.5 font-medium text-slate-700">${item.name}</td>
+                    <td class="p-1.5 text-right text-slate-500">${item.theo.toFixed(2)} ${item.unit}</td>
+                    <td class="p-1.5 text-right font-semibold text-slate-800">${(item.theo * item.margin).toFixed(2)} ${item.unit}</td>
+                </tr>
+            `).join('');
+        }
+
+        function checkWarnings(d) {
+            const container = document.getElementById('warning-container');
+            let warnings = [];
+
+            if (d.npRatio < 1.05) {
+                warnings.push({ type: 'error', text: `N/P比が低下しています (${d.npRatio.toFixed(2)})。リチウム析出リスクに注意してください。` });
+            } else if (d.npRatio > 1.30) {
+                warnings.push({ type: 'info', text: `N/P比が高めです (${d.npRatio.toFixed(2)})。エネルギー密度が低下する可能性があります。` });
+            }
+
+            if (d.designCapacity < 0.9 * parseFloat(document.getElementById('target_capacity').value)) {
+                warnings.push({ type: 'warning', text: `設計容量 (${d.designCapacity.toFixed(2)}Ah) が目標容量を下回っています。` });
+            }
+
+            if (d.catWidth > d.anWidth || d.catLength > d.anLength) {
+                warnings.push({ type: 'error', text: `正極寸法が負極寸法を超過しています。短絡リスクがあります。負極を正極より大きく設計してください。` });
+            }
+
+            container.innerHTML = warnings.length === 0 
+                ? `<div class="p-2 bg-emerald-50 text-emerald-700 rounded border border-emerald-100 flex items-center gap-1.5"><svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>現在検出された設計上の不整合・警告はありません。</div>`
+                : warnings.map(w => {
+                    const bg = w.type === 'error' ? 'bg-rose-50 text-rose-700 border-rose-100' : (w.type === 'warning' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-blue-50 text-blue-700 border-blue-100');
+                    return `<div class="p-2 rounded border ${bg} flex items-start gap-1.5"><span>• ${w.text}</span></div>`;
+                }).join('');
+        }
+
+        // Draw Cell SVG with explicit tab size mapping and centered coordinate transformation
+        function getSvgMarkup(cW, cL, pW, pL, cCount, aCount, tabW, tabL) {
+            const svgW = 400;
+            const svgH = 300;
+            
+            // Total bounding width and height including tabs protruding upwards
+            const totalW = Math.max(pW, tabW * 2 + 16);
+            const totalH = pL + tabL;
+
+            const scale = Math.min((svgW - 40) / totalW, (svgH - 40) / totalH);
+
+            const scaledPWidth = pW * scale;
+            const scaledPHeight = pL * scale;
+            const scaledTabW = tabW * scale;
+            const scaledTabL = tabL * scale;
+
+            // Center in SVG viewport (200, 150) with offset for tabs
+            const originX = (svgW - scaledPWidth) / 2;
+            const originY = (svgH - scaledPHeight) / 2 + (scaledTabL / 2);
+
+            const ex = originX + ((pW - cW) / 2) * scale;
+            const ey = originY + ((pL - cL) / 2) * scale;
+            const ew = cW * scale;
+            const el = cL * scale;
+
+            // Tab X positions centered on pouch top edge
+            const posTabX = originX + scaledPWidth * 0.35 - scaledTabW / 2;
+            const negTabX = originX + scaledPWidth * 0.65 - scaledTabW / 2;
+            const tabY = originY - scaledTabL;
+
+            return `
+                <defs>
+                    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" stroke-width="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid)" rx="8"/>
+                
+                <!-- Pos Tab -->
+                <rect x="${posTabX}" y="${tabY}" width="${scaledTabW}" height="${scaledTabL}" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+                <text x="${posTabX - 4}" y="${tabY - 4}" fill="#ef4444" font-size="9" font-weight="bold">正極(+)</text>
+
+                <!-- Neg Tab -->
+                <rect x="${negTabX}" y="${tabY}" width="${scaledTabW}" height="${scaledTabL}" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+                <text x="${negTabX - 4}" y="${tabY - 4}" fill="#3b82f6" font-size="9" font-weight="bold">負極(-)</text>
+
+                <!-- Pouch Outer Frame -->
+                <rect x="${originX}" y="${originY}" width="${scaledPWidth}" height="${scaledPHeight}" rx="6" fill="#cbd5e1" stroke="#64748b" stroke-width="2" stroke-dasharray="4"/>
+                <text x="${originX + 8}" y="${originY + 16}" fill="#475569" font-size="10" font-weight="bold">パウチ外形 (${pW.toFixed(0)}×${pL.toFixed(0)}mm)</text>
+                
+                <!-- Seal Area Indicator -->
+                <rect x="${originX + 4}" y="${originY + 4}" width="${scaledPWidth - 8}" height="${scaledPHeight - 8}" rx="4" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2"/>
+
+                <!-- Electrode Stack Area -->
+                <rect x="${ex}" y="${ey}" width="${ew}" height="${el}" rx="2" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" stroke-opacity="0.8"/>
+                <text x="${ex + 6}" y="${ey + 16}" fill="#1e40af" font-size="10" font-weight="bold">積層体 (${cW}×${cL}mm, ${cCount}+${aCount}層)</text>
+            `;
+        }
+
+        function drawCellSVG(cW, cL, pW, pL, cCount, aCount, tabW, tabL) {
+            document.getElementById('cell-svg').innerHTML = getSvgMarkup(cW, cL, pW, pL, cCount, aCount, tabW, tabL);
+        }
+
+        function saveJSON() {
+            const data = {};
+            document.querySelectorAll('input, select').forEach(el => {
+                if (el.id) data[el.id] = el.value;
+            });
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${document.getElementById('cell_name').value || 'pouch_cell'}_design.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function loadJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    for (const [id, val] of Object.entries(data)) {
+                        const el = document.getElementById(id);
+                        if (el) el.value = val;
+                    }
+                    calcAll();
+                    alert('設計データを正常に読み込みました。');
+                } catch (err) {
+                    alert('JSONファイルの読み込みに失敗しました。ファイル形式を確認してください。');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function resetData() {
+            if (confirm('すべての入力値を初期値にリセットしますか？')) {
+                location.reload();
+            }
+        }
+
+        function duplicateCase() {
+            document.getElementById('cell_name').value += '_copy';
+            document.getElementById('proto_no').value += '-2';
+            calcAll();
+            alert('現在の設計を複製しました（セル名を変更しました）。');
+        }
+
+        function switchCase(caseId) {
+            if (caseId === 'caseA') {
+                document.getElementById('cathode_material').value = 'NMC622';
+                document.getElementById('anode_material').value = 'Graphite';
+                document.getElementById('target_capacity').value = '5.0';
+                document.getElementById('cat_loading').value = '18.5';
+                document.getElementById('an_loading').value = '11.2';
+            } else if (caseId === 'caseB') {
+                document.getElementById('cathode_material').value = 'NMC811';
+                document.getElementById('anode_material').value = 'Si_Graphite';
+                document.getElementById('target_capacity').value = '6.0';
+                document.getElementById('cat_loading').value = '21.0';
+                document.getElementById('an_loading').value = '13.0';
+            }
+            calcAll();
+        }
+
+        function openReportModal() {
+            const modal = document.getElementById('report-modal');
+            const area = document.getElementById('print-report-area');
+            
+            const cellName = document.getElementById('cell_name').value;
+            const protoNo = document.getElementById('proto_no').value;
+            const version = document.getElementById('version').value;
+            const designer = document.getElementById('designer').value;
+            const date = document.getElementById('create_date').value;
+
+            const cW = parseFloat(document.getElementById('cat_width').value) || 50;
+            const cL = parseFloat(document.getElementById('cat_length').value) || 80;
+            const cCount = parseInt(document.getElementById('cathode_count').value) || 15;
+            const aCount = parseInt(document.getElementById('anode_count').value) || 16;
+            const tabW = parseFloat(document.getElementById('tab_width').value) || 8;
+            const tabL = parseFloat(document.getElementById('tab_length').value) || 25;
+            const maxW = Math.max(cW, parseFloat(document.getElementById('an_width').value) || 52, parseFloat(document.getElementById('sep_width').value) || 54);
+            const maxL = Math.max(cL, parseFloat(document.getElementById('an_length').value) || 82, parseFloat(document.getElementById('sep_length').value) || 84);
+            const pouchW = maxW + 10;
+            const pouchL = maxL + 24;
+
+            area.innerHTML = `
+                <div class="border-b pb-4 mb-4">
+                    <h1 class="text-xl font-bold text-slate-900">パウチ型リチウムイオンセル 試作設計仕様書</h1>
+                    <div class="grid grid-cols-2 gap-2 mt-2 text-slate-600">
+                        <div><b>セル識別名:</b> ${cellName}</div>
+                        <div><b>試作番号:</b> ${protoNo}</div>
+                        <div><b>設計バージョン:</b> ${version}</div>
+                        <div><b>作成日:</b> ${date}</div>
+                        <div><b>設計担当者:</b> ${designer}</div>
+                        <div><b>電池化学系:</b> ${document.getElementById('chemistry_system').value}</div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h2 class="font-bold text-sm text-slate-800 mb-2">セル構造概念図 (PDF出力用)</h2>
+                    <div class="border border-slate-200 rounded p-2 bg-slate-50 flex justify-center">
+                        <svg viewBox="0 0 400 300" class="w-72 h-52">
+                            ${getSvgMarkup(cW, cL, pouchW, pouchL, cCount, aCount, tabW, tabL)}
+                        </svg>
+                    </div>
+                </div>
+
+                <h2 class="font-bold text-sm text-slate-800 mb-2">1. 主要設計結果・パフォーマンス</h2>
+                <table class="w-full border-collapse border border-slate-300 mb-4 text-xs">
+                    <tr class="bg-slate-100"><th class="border p-1.5 text-left">評価項目</th><th class="border p-1.5 text-right">計算値</th><th class="border p-1.5 text-left">備考</th></tr>
+                    <tr><td class="border p-1.5">設計容量 (Ah)</td><td class="border p-1.5 text-right font-bold">${document.getElementById('res-design-cap').innerText} Ah</td><td class="border p-1.5">正負極最小容量ベース</td></tr>
+                    <tr><td class="border p-1.5">公称電圧 (V)</td><td class="border p-1.5 text-right">${document.getElementById('nominal_voltage').value} V</td><td class="border p-1.5">平均作動電圧</td></tr>
+                    <tr><td class="border p-1.5">設計エネルギー (Wh)</td><td class="border p-1.5 text-right font-bold">${document.getElementById('res-energy').innerText} Wh</td><td class="border p-1.5">容量 × 公称電圧</td></tr>
+                    <tr><td class="border p-1.5">セル総重量 (g)</td><td class="border p-1.5 text-right">${document.getElementById('res-total-weight').innerText} g</td><td class="border p-1.5">部材・電解液・外装合算</td></tr>
+                    <tr><td class="border p-1.5">重量エネルギー密度</td><td class="border p-1.5 text-right font-bold text-indigo-600">${document.getElementById('res-grav-ed').innerText} Wh/kg</td><td class="border p-1.5">grav. energy density</td></tr>
+                    <tr><td class="border p-1.5">体積エネルギー密度</td><td class="border p-1.5 text-right font-bold text-indigo-600">${document.getElementById('res-vol-ed').innerText} Wh/L</td><td class="border p-1.5">vol. energy density</td></tr>
+                    <tr><td class="border p-1.5">N/P比</td><td class="border p-1.5 text-right font-bold text-blue-600">${document.getElementById('res-np-ratio').innerText}</td><td class="border p-1.5">負極容量 / 正極容量</td></tr>
+                </table>
+
+                <h2 class="font-bold text-sm text-slate-800 mb-2">2. 電極・積層仕様概要</h2>
+                <table class="w-full border-collapse border border-slate-300 mb-4 text-xs">
+                    <tr class="bg-slate-100"><th class="border p-1.5 text-left">項目</th><th class="border p-1.5 text-right">正極仕様</th><th class="border p-1.5 text-right">負極仕様</th></tr>
+                    <tr><td class="border p-1.5">活物質種類</td><td class="border p-1.5 text-right">${document.getElementById('cathode_material').value}</td><td class="border p-1.5">${document.getElementById('anode_material').value}</td></tr>
+                    <tr><td class="border p-1.5">電極寸法 (W × L mm)</td><td class="border p-1.5 text-right">${document.getElementById('cat_width').value} × ${document.getElementById('cat_length').value}</td><td class="border p-1.5">${document.getElementById('an_width').value} × ${document.getElementById('an_length').value}</td></tr>
+                    <tr><td class="border p-1.5">片面塗布量 (mg/cm²)</td><td class="border p-1.5 text-right">${document.getElementById('cat_loading').value}</td><td class="border p-1.5">${document.getElementById('an_loading').value}</td></tr>
+                    <tr><td class="border p-1.5">電極密度 (g/cm³)</td><td class="border p-1.5 text-right">${document.getElementById('cat_density').value}</td><td class="border p-1.5">${document.getElementById('an_density').value}</td></tr>
+                    <tr><td class="border p-1.5">プレス後厚 (µm)</td><td class="border p-1.5 text-right">${document.getElementById('cat_press_thick').value}</td><td class="border p-1.5">${document.getElementById('an_press_thick').value}</td></tr>
+                    <tr><td class="border p-1.5">電極枚数</td><td class="border p-1.5 text-right">${document.getElementById('cathode_count').value} 枚</td><td class="border p-1.5">${document.getElementById('anode_count').value} 枚</td></tr>
+                </table>
+
+                <h2 class="font-bold text-sm text-slate-800 mb-2">3. 注意事項・安全上の免責</h2>
+                <div class="p-3 bg-slate-50 border rounded text-[11px] text-slate-600 space-y-1">
+                    <p>• 本アプリケーションによる計算結果は、入力された幾何学的パラメータおよび物性値に基づく理論推定値です。</p>
+                    <p>• 実際の電池性能は材料グレード、電極構造、製造プロセス条件により変動します。</p>
+                    <p>• 試作・製造にあたっては、施設の安全管理規定を必ず遵守してください。</p>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+        }
+
+        function closeReportModal() {
+            document.getElementById('report-modal').classList.add('hidden');
+        }
+
+        window.onload = function() {
+            calcAll();
+        };
+    </script>
+</body>
+</html>
